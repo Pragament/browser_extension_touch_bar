@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Touch Bar</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main class="popup" aria-live="polite">
+      <header class="popup__header">
+        <div class="brand-mark" aria-hidden="true"></div>
+        <div>
+          <h1>Touch Bar</h1>
+          <p id="statusText">Ready</p>
+        </div>
+      </header>
+
+      <section class="control-row">
+        <label class="switch">
+          <input id="enabledToggle" type="checkbox">
+          <span class="switch__track" aria-hidden="true"></span>
+          <span class="switch__label">Show on pages</span>
+        </label>
+      </section>
+
+      <section class="field-group">
+        <label for="dictionarySelect">Dictionary</label>
+        <select id="dictionarySelect">
+          <option value="english">English</option>
+          <option value="html">HTML</option>
+          <option value="python">Python</option>
+        </select>
+      </section>
+
+      <section class="stats">
+        <div>
+          <span id="wordCount">0</span>
+          <small>words</small>
+        </div>
+        <div>
+          <span id="snippetCount">0</span>
+          <small>snippets</small>
+        </div>
+      </section>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

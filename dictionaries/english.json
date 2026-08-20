@@ -1,0 +1,21 @@
+{
+  "label": "English",
+  "words": [
+    "about", "absolutely", "after", "again", "already", "always", "because", "before",
+    "better", "between", "browser", "certainly", "change", "complete", "consider",
+    "could", "create", "definitely", "different", "edge", "excellent", "extension",
+    "feature", "finally", "first", "great", "hello", "important", "inside", "instead",
+    "keyboard", "little", "maybe", "message", "Microsoft", "moment", "never",
+    "please", "possible", "probably", "quickly", "really", "remember", "request",
+    "right", "setting", "should", "snippet", "something", "strong", "support",
+    "thanks", "there", "through", "toggle", "touch", "typing", "understand",
+    "update", "using", "visible", "where", "window", "without"
+  ],
+  "snippets": [
+    "Thanks!", "Sounds good.", "I will take a look.", "That works for me.",
+    "Could you share more context?", "Here is the update:", "Let me know what you think.",
+    "I agree.", "One more thing:", "The main idea is", "For example,",
+    "In my opinion,", "Best regards,", "Quick question:", "This should help.",
+    "Nice catch.", "I can confirm that", "Next steps:"
+  ]
+}

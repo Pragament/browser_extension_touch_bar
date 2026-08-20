@@ -1,0 +1,38 @@
+{
+  "label": "HTML",
+  "words": [
+    "<a>", "<article>", "<aside>", "<button>", "<canvas>", "<div>", "<em>", "<fieldset>",
+    "<footer>", "<form>", "<h1>", "<header>", "<img>", "<input>", "<label>", "<li>",
+    "<main>", "<meta>", "<nav>", "<ol>", "<option>", "<p>", "<script>", "<section>",
+    "<select>", "<span>", "<strong>", "<style>", "<table>", "<tbody>", "<td>", "<textarea>",
+    "<th>", "<thead>", "<tr>", "<ul>", "alt", "aria-label", "async", "autocomplete",
+    "class", "data-", "defer", "disabled", "for", "height", "href", "id", "loading",
+    "method", "name", "placeholder", "rel", "required", "role", "src", "target",
+    "title", "type", "value", "width", "border-radius", "display", "grid", "flex",
+    "gap", "margin", "padding", "position", "color", "background", "font-size",
+    "line-height", "z-index", "viewport", "template", "doctype", "stylesheet",
+    "module", "button", "input"
+  ],
+  "snippets": [
+    "<!doctype html>\n<html lang=\"en\">\n</html>",
+    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
+    "<link rel=\"stylesheet\" href=\"styles.css\">",
+    "<script src=\"app.js\" defer></script>",
+    "<button type=\"button\"></button>",
+    "<input type=\"text\" name=\"\" placeholder=\"\">",
+    "<label for=\"\"></label>",
+    "<section aria-labelledby=\"\"></section>",
+    "<img src=\"\" alt=\"\" loading=\"lazy\">",
+    "<a href=\"\" target=\"_blank\" rel=\"noreferrer\"></a>",
+    "<ul>\n  <li></li>\n</ul>",
+    "<form method=\"post\"></form>",
+    "<article></article>",
+    "<nav aria-label=\"Primary\"></nav>",
+    "display: grid;\ngap: 1rem;",
+    "display: flex;\nalign-items: center;",
+    "position: relative;",
+    "border-radius: 8px;",
+    "color: #111827;",
+    "background: #ffffff;"
+  ]
+}

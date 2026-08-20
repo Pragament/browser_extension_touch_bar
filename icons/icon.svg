@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Touch Bar icon">
+  <rect width="128" height="128" rx="24" fill="#17191f"/>
+  <rect x="18" y="38" width="92" height="52" rx="12" fill="#252936" stroke="#ffffff" stroke-opacity=".18" stroke-width="4"/>
+  <rect x="30" y="51" width="28" height="26" rx="6" fill="#72e7ff"/>
+  <rect x="64" y="51" width="34" height="10" rx="5" fill="#8affb2"/>
+  <rect x="64" y="68" width="24" height="9" rx="4.5" fill="#ffd166"/>
+</svg>

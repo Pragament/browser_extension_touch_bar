@@ -1,0 +1,39 @@
+{
+  "label": "Python",
+  "words": [
+    "abs", "all", "any", "append", "async", "await", "break", "class", "continue",
+    "dataclass", "def", "dict", "elif", "else", "enumerate", "except", "False",
+    "finally", "for", "from", "get", "global", "if", "import", "in", "is",
+    "items", "lambda", "len", "list", "map", "None", "nonlocal", "open", "or",
+    "pass", "print", "property", "raise", "range", "return", "set", "sorted",
+    "str", "sum", "super", "True", "try", "tuple", "with", "yield", "__init__",
+    "__name__", "asyncio", "collections", "contextlib", "datetime", "defaultdict",
+    "Exception", "FileNotFoundError", "filter", "format", "json", "keys", "logging",
+    "main", "match", "pathlib", "Path", "pytest", "requests", "self", "typing",
+    "Union", "Optional", "Protocol", "Sequence", "Iterable", "TypeError",
+    "ValueError", "while", "zip", "join", "split", "strip", "lower", "upper",
+    "replace", "startswith", "endswith", "read_text", "write_text", "exists"
+  ],
+  "snippets": [
+    "def main():\n    pass\n\nif __name__ == \"__main__\":\n    main()",
+    "def function_name(arg):\n    return arg",
+    "class Example:\n    def __init__(self):\n        pass",
+    "for item in items:\n    print(item)",
+    "for index, item in enumerate(items):\n    print(index, item)",
+    "with open(path, \"r\", encoding=\"utf-8\") as file:\n    data = file.read()",
+    "try:\n    pass\nexcept Exception as exc:\n    raise exc",
+    "from pathlib import Path",
+    "import json\n\ndata = json.loads(raw)",
+    "from dataclasses import dataclass",
+    "@dataclass\nclass Item:\n    name: str",
+    "async def fetch():\n    return None",
+    "items = [item for item in items if item]",
+    "result = sorted(items, key=lambda item: item.name)",
+    "def test_example():\n    assert True",
+    "logger.info(\"message\")",
+    "raise ValueError(\"message\")",
+    "return {\"ok\": True}",
+    "if value is None:\n    return",
+    "match value:\n    case _:\n        pass"
+  ]
+}

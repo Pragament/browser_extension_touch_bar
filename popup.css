@@ -1,0 +1,154 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  width: 320px;
+  margin: 0;
+  color: #f5f7fb;
+  background: #17191f;
+}
+
+.popup {
+  display: grid;
+  gap: 18px;
+  padding: 18px;
+}
+
+.popup__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-mark {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, #69e1ff 0%, #8affb2 55%, #ffd166 100%);
+  box-shadow: 0 10px 28px rgb(105 225 255 / 22%);
+}
+
+h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 720;
+  letter-spacing: 0;
+}
+
+p {
+  margin: 3px 0 0;
+  color: #aeb6c7;
+  font-size: 12px;
+}
+
+.control-row,
+.field-group,
+.stats {
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 5%);
+}
+
+.control-row {
+  padding: 14px;
+}
+
+.switch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.switch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.switch__track {
+  position: relative;
+  width: 42px;
+  height: 24px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #4a5162;
+  transition: background 140ms ease;
+}
+
+.switch__track::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 28%);
+  transition: transform 140ms ease;
+}
+
+.switch input:checked + .switch__track {
+  background: #25c47a;
+}
+
+.switch input:checked + .switch__track::after {
+  transform: translateX(18px);
+}
+
+.switch__label,
+label {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.field-group {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+}
+
+select {
+  width: 100%;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 6px;
+  padding: 9px 10px;
+  color: #f5f7fb;
+  background: #252936;
+  font: inherit;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  overflow: hidden;
+}
+
+.stats div {
+  display: grid;
+  gap: 2px;
+  padding: 13px 14px;
+}
+
+.stats div + div {
+  border-left: 1px solid rgb(255 255 255 / 10%);
+}
+
+.stats span {
+  font-size: 22px;
+  font-weight: 760;
+}
+
+.stats small {
+  color: #aeb6c7;
+  font-size: 12px;
+}
