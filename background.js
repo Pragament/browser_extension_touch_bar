@@ -121,6 +121,20 @@ async function fetchApiDictionaries() {
   );
 }
 
+async function getCachedApiDictionaries() {
+  try {
+    const stored = await chrome.storage.local.get({ [API_CACHE_KEY]: {} });
+    const cached = stored[API_CACHE_KEY] || {};
+    return Object.fromEntries(
+      Object.keys(DICTIONARY_API_URLS).map((key) => [key, normalizeDictionary(key, cached[key]?.dictionary)])
+    );
+  } catch {
+    return Object.fromEntries(
+      Object.keys(DICTIONARY_API_URLS).map((key) => [key, normalizeDictionary(key, null)])
+    );
+  }
+}
+
 async function getDictionaries() {
   if (dictionaryCache) {
     return dictionaryCache;
@@ -128,7 +142,7 @@ async function getDictionaries() {
 
   const [localDictionaries, apiDictionaries] = await Promise.all([
     loadLocalDictionaries(),
-    fetchApiDictionaries()
+    getCachedApiDictionaries()
   ]);
 
   dictionaryCache = Object.fromEntries(
@@ -137,6 +151,17 @@ async function getDictionaries() {
       mergeDictionaries(key, localDictionaries[key], apiDictionaries[key])
     ])
   );
+
+  // Fetch online updates asynchronously in the background to not block the message response
+  fetchApiDictionaries().then((updatedApiDictionaries) => {
+    dictionaryCache = Object.fromEntries(
+      Object.keys(DICTIONARY_FILES).map((key) => [
+        key,
+        mergeDictionaries(key, localDictionaries[key], updatedApiDictionaries[key])
+      ])
+    );
+    dictionaryMetaCache = null; // Invalidate meta cache so it gets recalculated next time
+  }).catch(() => {});
 
   return dictionaryCache;
 }

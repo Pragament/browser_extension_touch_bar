@@ -62,12 +62,31 @@
     return null;
   };
 
+  const getActiveElement = () => {
+    let el = document.activeElement;
+    while (el && el.shadowRoot && el.shadowRoot.activeElement) {
+      el = el.shadowRoot.activeElement;
+    }
+    return el;
+  };
+
+  const closestIncludingShadow = (element, selector) => {
+    let el = element;
+    while (el) {
+      if (el.closest && el.closest(selector)) {
+        return el.closest(selector);
+      }
+      el = el.getRootNode()?.host;
+    }
+    return null;
+  };
+
   const isEditable = (element) => {
     if (!element || element === input) {
       return false;
     }
 
-    if (element.closest?.(".CodeMirror") || element.closest?.(".monaco-editor") || element.closest?.(".ace_editor")) {
+    if (closestIncludingShadow(element, ".CodeMirror, .monaco-editor, .ace_editor")) {
       return true;
     }
 
@@ -87,6 +106,7 @@
     const targetClass = typeof targetElement?.className === "string" ? targetElement.className.toLowerCase() : "";
 
     let detected = null;
+    const isCodeEditor = closestIncludingShadow(targetElement, ".CodeMirror, .monaco-editor, .ace_editor");
 
     if (
       url.includes("html") ||
@@ -94,7 +114,7 @@
       targetId.includes("html") ||
       targetClass.includes("html") ||
       targetId === "textareacode" ||
-      document.querySelector(".CodeMirror")
+      (isCodeEditor && !url.includes("python") && !title.includes("python"))
     ) {
       detected = "html";
     } else if (
@@ -156,7 +176,7 @@
     return element.value || "";
   };
 
-  const getCurrentQuery = () => input.value.trim().toLowerCase().split(/\s+/).pop() || "";
+  const getCurrentQuery = () => input.value.trim();
 
   const normalizeHistoryTerm = (text) => text.trim().replace(/\s+/g, " ");
 
@@ -242,12 +262,25 @@
       // Fall back to bundled dictionaries if the service worker cannot respond.
     }
 
-    dictionaries = await loadLocalDictionaries();
+    try {
+      dictionaries = await loadLocalDictionaries();
+    } catch (e) {
+      console.error("Failed to load local dictionaries:", e);
+      dictionaries = {
+        english: { label: "English", words: [], snippets: [] },
+        html: { label: "HTML", words: [], snippets: [] },
+        python: { label: "Python", words: [], snippets: [] }
+      };
+    }
   };
 
   const loadRecentHistory = async () => {
-    const stored = await chrome.storage.local.get({ [RECENT_HISTORY_KEY]: [] });
-    recentHistory = Array.isArray(stored[RECENT_HISTORY_KEY]) ? stored[RECENT_HISTORY_KEY] : [];
+    try {
+      const stored = await chrome.storage.local.get({ [RECENT_HISTORY_KEY]: [] });
+      recentHistory = Array.isArray(stored[RECENT_HISTORY_KEY]) ? stored[RECENT_HISTORY_KEY] : [];
+    } catch {
+      recentHistory = [];
+    }
   };
 
   const dispatchInputEvents = (element) => {
@@ -299,25 +332,43 @@
       return;
     }
 
+    element.focus();
+
     if (element.isContentEditable) {
-      element.focus();
       document.execCommand("insertText", false, value);
       dispatchInputEvents(element);
       return;
     }
 
-    if (replaceToken) {
-      replaceCurrentToken(element, value);
-      return;
+    try {
+      if (replaceToken) {
+        const currentValue = element.value || "";
+        const cursor = element.selectionStart ?? currentValue.length;
+        const before = currentValue.slice(0, cursor);
+        const tokenStart = before.search(/\S+$/);
+        const startPos = tokenStart >= 0 ? tokenStart : cursor;
+        element.setSelectionRange(startPos, cursor);
+      }
+
+      const success = document.execCommand("insertText", false, value);
+      if (success) {
+        dispatchInputEvents(element);
+        return;
+      }
+    } catch (e) {
+      console.warn("execCommand failed, falling back to direct value modification:", e);
     }
 
-    const start = element.selectionStart ?? element.value.length;
-    const end = element.selectionEnd ?? element.value.length;
-    element.value = `${element.value.slice(0, start)}${value}${element.value.slice(end)}`;
-    const nextPosition = start + value.length;
-    element.setSelectionRange(nextPosition, nextPosition);
-    element.focus();
-    dispatchInputEvents(element);
+    if (replaceToken) {
+      replaceCurrentToken(element, value);
+    } else {
+      const start = element.selectionStart ?? element.value.length;
+      const end = element.selectionEnd ?? element.value.length;
+      element.value = `${element.value.slice(0, start)}${value}${element.value.slice(end)}`;
+      const nextPosition = start + value.length;
+      element.setSelectionRange(nextPosition, nextPosition);
+      dispatchInputEvents(element);
+    }
   };
 
   const applyValue = (value, options = {}) => {
@@ -338,17 +389,31 @@
     }
 
     const lowerQuery = query.toLowerCase();
+    const queryWords = lowerQuery.split(/\s+/).filter(Boolean);
+    if (queryWords.length === 0) {
+      return [];
+    }
+
     const seen = new Set();
+    const matchesAllWords = (text) => {
+      const lowerText = text.toLowerCase();
+      return queryWords.every((word) => lowerText.includes(word));
+    };
+
     const recentMatches = recentHistory
-      .filter((item) => item.text.toLowerCase().startsWith(lowerQuery) && item.text.toLowerCase() !== lowerQuery)
+      .filter((item) => matchesAllWords(item.text))
       .sort((a, b) => (b.count - a.count) || (b.lastUsed - a.lastUsed))
       .map((item) => ({ text: item.text, source: "recent" }));
 
     const dictionaryMatches = activeDict().words
-      .filter((word) => word.toLowerCase().startsWith(lowerQuery) && word.toLowerCase() !== lowerQuery)
+      .filter(matchesAllWords)
       .map((word) => ({ text: word, source: "dict" }));
 
-    return [...recentMatches, ...dictionaryMatches]
+    const snippetMatches = activeDict().snippets
+      .filter(matchesAllWords)
+      .map((snippet) => ({ text: snippet, source: "snippet" }));
+
+    return [...recentMatches, ...dictionaryMatches, ...snippetMatches]
       .filter((item) => {
         const key = item.text.toLowerCase();
         if (seen.has(key)) {
@@ -356,8 +421,7 @@
         }
         seen.add(key);
         return true;
-      })
-      .slice(0, MAX_SUGGESTIONS);
+      });
   };
 
   const renderSuggestions = () => {
@@ -375,10 +439,19 @@
       button.type = "button";
       button.className = "edge-touch-bar__suggestion";
       button.dataset.source = match.source;
-      button.title = `Alt+${index + 1}`;
-      button.innerHTML = `<span class="edge-touch-bar__shortcut">${index + 1}</span><span class="edge-touch-bar__suggestion-text"></span>`;
+      
+      const hasShortcut = index < 9;
+      if (hasShortcut) {
+        button.title = `Alt+${index + 1}`;
+        button.innerHTML = `<span class="edge-touch-bar__shortcut">${index + 1}</span><span class="edge-touch-bar__suggestion-text"></span>`;
+      } else {
+        button.innerHTML = `<span class="edge-touch-bar__suggestion-text"></span>`;
+      }
       button.querySelector(".edge-touch-bar__suggestion-text").textContent = match.text;
-      button.addEventListener("click", () => applyValue(match.text, { replaceToken: true }));
+      button.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        applyValue(match.text, { replaceToken: true });
+      });
       suggestions.append(button);
     });
   };
@@ -396,7 +469,10 @@
       button.className = "edge-touch-bar__snippet";
       button.textContent = snippet;
       button.title = snippet;
-      button.addEventListener("click", () => applyValue(snippet));
+      button.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        applyValue(snippet);
+      });
       snippetPanel.append(button);
     }
   };
@@ -1001,8 +1077,11 @@
 
       .edge-touch-bar__suggestions {
         display: flex;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
+        overflow-x: auto;
         gap: 6px;
+        padding-bottom: 4px;
+        scrollbar-width: thin;
       }
 
       .edge-touch-bar__suggestions[hidden],
@@ -1011,14 +1090,14 @@
       }
 
       .edge-touch-bar__suggestion {
-        display: inline-grid;
-        grid-template-columns: 18px minmax(0, auto);
+        display: inline-flex;
         align-items: center;
         gap: 6px;
         max-width: 210px;
-        padding: 5px 9px 5px 5px;
+        padding: 5px 9px;
         overflow: hidden;
         font-size: 12px;
+        flex-shrink: 0;
       }
 
       .edge-touch-bar__suggestion[data-source="recent"] {
@@ -1253,6 +1332,12 @@
     modeMenu = shadowRoot.querySelector(".edge-touch-bar__mode-menu");
     shortcutHint = shadowRoot.querySelector(".edge-touch-bar__hint");
 
+    container.addEventListener("mousedown", (event) => {
+      if (event.target !== input) {
+        event.preventDefault();
+      }
+    });
+
     input.addEventListener("input", () => {
       rememberTerms(extractHistoryTerms(input.value));
       renderSuggestions();
@@ -1288,32 +1373,44 @@
 
   const init = async () => {
     await Promise.all([loadDictionaries(), loadRecentHistory(), loadSavedPosition(), loadSavedSize(), loadSavedTheme()]);
-    settings = {
-      ...DEFAULT_SETTINGS,
-      ...(await chrome.storage.sync.get(DEFAULT_SETTINGS))
-    };
+    
+    try {
+      const storedSettings = await chrome.storage.sync.get(DEFAULT_SETTINGS);
+      settings = {
+        ...DEFAULT_SETTINGS,
+        ...(storedSettings || {})
+      };
+    } catch (e) {
+      settings = { ...DEFAULT_SETTINGS };
+    }
 
     createRoot();
     setEnabled(settings.enabled);
-    detectLanguageMode(document.activeElement);
+    const activeEl = getActiveElement();
+    if (isEditable(activeEl)) {
+      lastEditable = activeEl;
+    }
+    detectLanguageMode(activeEl);
     updateDictionaryUi();
   };
 
   document.addEventListener("focusin", (event) => {
-    if (isEditable(event.target)) {
-      lastEditable = event.target;
-      detectLanguageMode(event.target);
+    const activeEl = getActiveElement();
+    if (isEditable(activeEl)) {
+      lastEditable = activeEl;
+      detectLanguageMode(activeEl);
       input.value = "";
       renderSuggestions();
     }
   }, true);
 
   document.addEventListener("input", (event) => {
-    if (isEditable(event.target)) {
-      lastEditable = event.target;
-      detectLanguageMode(event.target);
-      input.value = getEditableText(event.target).trim().split(/\s+/).pop() || "";
-      scheduleRememberFromElement(event.target);
+    const activeEl = getActiveElement();
+    if (isEditable(activeEl)) {
+      lastEditable = activeEl;
+      detectLanguageMode(activeEl);
+      input.value = getEditableText(activeEl).trim().split(/\s+/).pop() || "";
+      scheduleRememberFromElement(activeEl);
       renderSuggestions();
     }
   }, true);
@@ -1331,6 +1428,7 @@
 
     if (changes.dictionary) {
       settings.dictionary = changes.dictionary.newValue;
+      userOverrideDictionary = true;
       updateDictionaryUi();
     }
   });
