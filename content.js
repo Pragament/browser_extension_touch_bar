@@ -62,31 +62,12 @@
     return null;
   };
 
-  const getActiveElement = () => {
-    let el = document.activeElement;
-    while (el && el.shadowRoot && el.shadowRoot.activeElement) {
-      el = el.shadowRoot.activeElement;
-    }
-    return el;
-  };
-
-  const closestIncludingShadow = (element, selector) => {
-    let el = element;
-    while (el) {
-      if (el.closest && el.closest(selector)) {
-        return el.closest(selector);
-      }
-      el = el.getRootNode()?.host;
-    }
-    return null;
-  };
-
   const isEditable = (element) => {
     if (!element || element === input) {
       return false;
     }
 
-    if (closestIncludingShadow(element, ".CodeMirror, .monaco-editor, .ace_editor")) {
+    if (element.closest?.(".CodeMirror") || element.closest?.(".monaco-editor") || element.closest?.(".ace_editor")) {
       return true;
     }
 
@@ -106,7 +87,6 @@
     const targetClass = typeof targetElement?.className === "string" ? targetElement.className.toLowerCase() : "";
 
     let detected = null;
-    const isCodeEditor = closestIncludingShadow(targetElement, ".CodeMirror, .monaco-editor, .ace_editor");
 
     if (
       url.includes("html") ||
@@ -114,7 +94,7 @@
       targetId.includes("html") ||
       targetClass.includes("html") ||
       targetId === "textareacode" ||
-      (isCodeEditor && !url.includes("python") && !title.includes("python"))
+      document.querySelector(".CodeMirror")
     ) {
       detected = "html";
     } else if (
@@ -135,6 +115,155 @@
   };
 
   const activeDict = () => dictionaries[settings.dictionary] || dictionaries.english || { label: "English", words: [], snippets: [] };
+
+  // --- "Learn this" lookup: resolves a dictionary word or snippet to the
+  // matching W3Schools reference page, so a student can click a suggestion
+  // or snippet in the Touch Bar and jump straight to an explanation instead
+  // of just inserting the text. Only offered for the HTML and Python
+  // dictionaries. Anything not in the curated map below falls back to a
+  // site-restricted search so the link always lands somewhere useful.
+  const W3SCHOOLS_BASE = "https://www.w3schools.com";
+
+  const HTML_TAG_NAMES = new Set([
+    "a", "article", "aside", "button", "canvas", "div", "em", "fieldset", "footer",
+    "form", "header", "img", "input", "label", "li", "main", "meta", "nav", "ol",
+    "option", "p", "script", "section", "select", "span", "strong", "style",
+    "table", "tbody", "td", "textarea", "th", "thead", "tr", "ul"
+  ]);
+
+  const HTML_ATTRIBUTES = new Set([
+    "alt", "autocomplete", "class", "defer", "disabled", "for", "height", "href",
+    "id", "loading", "method", "name", "placeholder", "rel", "required", "src",
+    "target", "title", "type", "value", "width"
+  ]);
+
+  const PY_KEYWORDS = new Set([
+    "False", "None", "True", "and", "as", "assert", "async", "await", "break",
+    "class", "continue", "def", "del", "elif", "else", "except", "finally", "for",
+    "from", "global", "if", "import", "in", "is", "lambda", "nonlocal", "not",
+    "or", "pass", "raise", "return", "try", "while", "with", "yield"
+  ]);
+
+  const PY_BUILTIN_FUNCS = new Set([
+    "abs", "all", "any", "dict", "enumerate", "filter", "format", "len", "list",
+    "map", "open", "print", "range", "set", "sorted", "str", "sum", "tuple", "zip"
+  ]);
+
+  const PY_STRING_METHODS = new Set([
+    "join", "split", "strip", "lower", "upper", "replace", "startswith", "endswith"
+  ]);
+
+  const PY_LIST_METHODS = new Set(["append"]);
+  const PY_DICT_METHODS = new Set(["items", "keys", "get"]);
+  const PY_EXCEPTIONS = new Set(["Exception", "FileNotFoundError", "TypeError", "ValueError"]);
+  const PY_MODULE_PAGES = {
+    json: "python/python_json.asp",
+    datetime: "python/python_datetime.asp"
+  };
+
+  const w3SchoolsSearchUrl = (term) =>
+    `https://www.google.com/search?q=${encodeURIComponent(`site:w3schools.com ${term}`)}`;
+
+  const resolveW3SchoolsUrl = (dictionaryKey, rawTerm) => {
+    const bare = (rawTerm || "").replace(/[<>]/g, "").trim();
+    if (!bare) {
+      return null;
+    }
+    const lower = bare.toLowerCase();
+
+    if (dictionaryKey === "html") {
+      if (lower === "doctype") {
+        return `${W3SCHOOLS_BASE}/tags/tag_doctype.asp`;
+      }
+      if (/^h[1-6]$/.test(lower)) {
+        return `${W3SCHOOLS_BASE}/tags/tag_hn.asp`;
+      }
+      if (HTML_TAG_NAMES.has(lower)) {
+        return `${W3SCHOOLS_BASE}/tags/tag_${lower}.asp`;
+      }
+      if (HTML_ATTRIBUTES.has(lower)) {
+        return `${W3SCHOOLS_BASE}/tags/att_${lower}.asp`;
+      }
+      return w3SchoolsSearchUrl(bare);
+    }
+
+    if (dictionaryKey === "python") {
+      if (PY_KEYWORDS.has(bare)) {
+        return `${W3SCHOOLS_BASE}/python/python_ref_keywords.asp`;
+      }
+      if (PY_BUILTIN_FUNCS.has(lower)) {
+        return `${W3SCHOOLS_BASE}/python/ref_func_${lower}.asp`;
+      }
+      if (PY_STRING_METHODS.has(lower)) {
+        return `${W3SCHOOLS_BASE}/python/ref_string_${lower}.asp`;
+      }
+      if (PY_LIST_METHODS.has(lower)) {
+        return `${W3SCHOOLS_BASE}/python/ref_list_${lower}.asp`;
+      }
+      if (PY_DICT_METHODS.has(lower)) {
+        return `${W3SCHOOLS_BASE}/python/ref_dict_${lower}.asp`;
+      }
+      if (PY_EXCEPTIONS.has(bare)) {
+        return `${W3SCHOOLS_BASE}/python/python_ref_exceptions.asp`;
+      }
+      if (PY_MODULE_PAGES[lower]) {
+        return `${W3SCHOOLS_BASE}/${PY_MODULE_PAGES[lower]}`;
+      }
+      return w3SchoolsSearchUrl(bare);
+    }
+
+    return null;
+  };
+
+  // For multi-line snippets, pick the first tag/keyword worth linking to
+  // rather than the whole block.
+  const extractPrimaryTerm = (dictionaryKey, text) => {
+    if (dictionaryKey === "html") {
+      const match = text.match(/<([a-zA-Z0-9]+)/);
+      return match ? match[1] : null;
+    }
+    if (dictionaryKey === "python") {
+      const tokens = text.match(/[A-Za-z_][A-Za-z0-9_]*/g) || [];
+      const keywordOrBuiltin = tokens.find(
+        (token) => PY_KEYWORDS.has(token) || PY_BUILTIN_FUNCS.has(token.toLowerCase())
+      );
+      return keywordOrBuiltin || tokens[0] || null;
+    }
+    return null;
+  };
+
+  const openW3SchoolsLookup = (dictionaryKey, term) => {
+    const url = resolveW3SchoolsUrl(dictionaryKey, term);
+    if (url) {
+      window.open(url, "_blank", "noopener");
+    }
+  };
+
+  const addLookupAffordance = (button, dictionaryKey, term, extraClass) => {
+    if (dictionaryKey !== "html" && dictionaryKey !== "python") {
+      return;
+    }
+    button.classList.add(extraClass);
+    const lookup = document.createElement("span");
+    lookup.className = "edge-touch-bar__lookup";
+    lookup.textContent = "?";
+    lookup.setAttribute("role", "button");
+    lookup.setAttribute("tabindex", "0");
+    lookup.title = `Look up "${term}" on W3Schools`;
+    lookup.setAttribute("aria-label", `Look up ${term} on W3Schools`);
+    const trigger = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openW3SchoolsLookup(dictionaryKey, term);
+    };
+    lookup.addEventListener("click", trigger);
+    lookup.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        trigger(event);
+      }
+    });
+    button.append(lookup);
+  };
 
   const normalizeDictionary = (key, dictionary) => {
     const source = Array.isArray(dictionary) ? { words: dictionary } : dictionary || {};
@@ -176,7 +305,7 @@
     return element.value || "";
   };
 
-  const getCurrentQuery = () => input.value.trim();
+  const getCurrentQuery = () => input.value.trim().toLowerCase().split(/\s+/).pop() || "";
 
   const normalizeHistoryTerm = (text) => text.trim().replace(/\s+/g, " ");
 
@@ -262,25 +391,12 @@
       // Fall back to bundled dictionaries if the service worker cannot respond.
     }
 
-    try {
-      dictionaries = await loadLocalDictionaries();
-    } catch (e) {
-      console.error("Failed to load local dictionaries:", e);
-      dictionaries = {
-        english: { label: "English", words: [], snippets: [] },
-        html: { label: "HTML", words: [], snippets: [] },
-        python: { label: "Python", words: [], snippets: [] }
-      };
-    }
+    dictionaries = await loadLocalDictionaries();
   };
 
   const loadRecentHistory = async () => {
-    try {
-      const stored = await chrome.storage.local.get({ [RECENT_HISTORY_KEY]: [] });
-      recentHistory = Array.isArray(stored[RECENT_HISTORY_KEY]) ? stored[RECENT_HISTORY_KEY] : [];
-    } catch {
-      recentHistory = [];
-    }
+    const stored = await chrome.storage.local.get({ [RECENT_HISTORY_KEY]: [] });
+    recentHistory = Array.isArray(stored[RECENT_HISTORY_KEY]) ? stored[RECENT_HISTORY_KEY] : [];
   };
 
   const dispatchInputEvents = (element) => {
@@ -332,43 +448,25 @@
       return;
     }
 
-    element.focus();
-
     if (element.isContentEditable) {
+      element.focus();
       document.execCommand("insertText", false, value);
       dispatchInputEvents(element);
       return;
     }
 
-    try {
-      if (replaceToken) {
-        const currentValue = element.value || "";
-        const cursor = element.selectionStart ?? currentValue.length;
-        const before = currentValue.slice(0, cursor);
-        const tokenStart = before.search(/\S+$/);
-        const startPos = tokenStart >= 0 ? tokenStart : cursor;
-        element.setSelectionRange(startPos, cursor);
-      }
-
-      const success = document.execCommand("insertText", false, value);
-      if (success) {
-        dispatchInputEvents(element);
-        return;
-      }
-    } catch (e) {
-      console.warn("execCommand failed, falling back to direct value modification:", e);
-    }
-
     if (replaceToken) {
       replaceCurrentToken(element, value);
-    } else {
-      const start = element.selectionStart ?? element.value.length;
-      const end = element.selectionEnd ?? element.value.length;
-      element.value = `${element.value.slice(0, start)}${value}${element.value.slice(end)}`;
-      const nextPosition = start + value.length;
-      element.setSelectionRange(nextPosition, nextPosition);
-      dispatchInputEvents(element);
+      return;
     }
+
+    const start = element.selectionStart ?? element.value.length;
+    const end = element.selectionEnd ?? element.value.length;
+    element.value = `${element.value.slice(0, start)}${value}${element.value.slice(end)}`;
+    const nextPosition = start + value.length;
+    element.setSelectionRange(nextPosition, nextPosition);
+    element.focus();
+    dispatchInputEvents(element);
   };
 
   const applyValue = (value, options = {}) => {
@@ -389,31 +487,17 @@
     }
 
     const lowerQuery = query.toLowerCase();
-    const queryWords = lowerQuery.split(/\s+/).filter(Boolean);
-    if (queryWords.length === 0) {
-      return [];
-    }
-
     const seen = new Set();
-    const matchesAllWords = (text) => {
-      const lowerText = text.toLowerCase();
-      return queryWords.every((word) => lowerText.includes(word));
-    };
-
     const recentMatches = recentHistory
-      .filter((item) => matchesAllWords(item.text))
+      .filter((item) => item.text.toLowerCase().startsWith(lowerQuery) && item.text.toLowerCase() !== lowerQuery)
       .sort((a, b) => (b.count - a.count) || (b.lastUsed - a.lastUsed))
       .map((item) => ({ text: item.text, source: "recent" }));
 
     const dictionaryMatches = activeDict().words
-      .filter(matchesAllWords)
+      .filter((word) => word.toLowerCase().startsWith(lowerQuery) && word.toLowerCase() !== lowerQuery)
       .map((word) => ({ text: word, source: "dict" }));
 
-    const snippetMatches = activeDict().snippets
-      .filter(matchesAllWords)
-      .map((snippet) => ({ text: snippet, source: "snippet" }));
-
-    return [...recentMatches, ...dictionaryMatches, ...snippetMatches]
+    return [...recentMatches, ...dictionaryMatches]
       .filter((item) => {
         const key = item.text.toLowerCase();
         if (seen.has(key)) {
@@ -421,7 +505,8 @@
         }
         seen.add(key);
         return true;
-      });
+      })
+      .slice(0, MAX_SUGGESTIONS);
   };
 
   const renderSuggestions = () => {
@@ -439,19 +524,11 @@
       button.type = "button";
       button.className = "edge-touch-bar__suggestion";
       button.dataset.source = match.source;
-      
-      const hasShortcut = index < 9;
-      if (hasShortcut) {
-        button.title = `Alt+${index + 1}`;
-        button.innerHTML = `<span class="edge-touch-bar__shortcut">${index + 1}</span><span class="edge-touch-bar__suggestion-text"></span>`;
-      } else {
-        button.innerHTML = `<span class="edge-touch-bar__suggestion-text"></span>`;
-      }
+      button.title = `Alt+${index + 1}`;
+      button.innerHTML = `<span class="edge-touch-bar__shortcut">${index + 1}</span><span class="edge-touch-bar__suggestion-text"></span>`;
       button.querySelector(".edge-touch-bar__suggestion-text").textContent = match.text;
-      button.addEventListener("pointerdown", (event) => {
-        event.preventDefault();
-        applyValue(match.text, { replaceToken: true });
-      });
+      button.addEventListener("click", () => applyValue(match.text, { replaceToken: true }));
+      addLookupAffordance(button, settings.dictionary, match.text, "edge-touch-bar__suggestion--lookup");
       suggestions.append(button);
     });
   };
@@ -469,10 +546,11 @@
       button.className = "edge-touch-bar__snippet";
       button.textContent = snippet;
       button.title = snippet;
-      button.addEventListener("pointerdown", (event) => {
-        event.preventDefault();
-        applyValue(snippet);
-      });
+      button.addEventListener("click", () => applyValue(snippet));
+      const primaryTerm = extractPrimaryTerm(settings.dictionary, snippet);
+      if (primaryTerm) {
+        addLookupAffordance(button, settings.dictionary, primaryTerm, "edge-touch-bar__snippet--lookup");
+      }
       snippetPanel.append(button);
     }
   };
@@ -640,9 +718,13 @@
     }
 
     if (position && typeof position.left === "number" && typeof position.top === "number") {
-      root.style.left = `${position.left}px`;
-      root.style.top = `${position.top}px`;
-      root.style.transform = "none";
+      // Move via transform, not left/top: transform is composited on the GPU
+      // and never triggers layout, so dragging stays smooth even with the
+      // backdrop-filter blur on this element. Setting left/top here instead
+      // is what caused the stutter/lag while dragging.
+      root.style.left = "0";
+      root.style.top = "0";
+      root.style.transform = `translate3d(${position.left}px, ${position.top}px, 0)`;
     } else {
       root.style.left = "50%";
       root.style.top = "10px";
@@ -709,15 +791,17 @@
     let startY = 0;
     let initialRect = null;
     let isDragging = false;
+    let rafId = null;
+    let pendingEvent = null;
 
-    const onPointerMove = (event) => {
-      if (!isDragging || !root) {
+    const flushMove = () => {
+      rafId = null;
+      if (!isDragging || !root || !pendingEvent) {
         return;
       }
-      event.preventDefault();
 
-      const deltaX = event.clientX - startX;
-      const deltaY = event.clientY - startY;
+      const deltaX = pendingEvent.clientX - startX;
+      const deltaY = pendingEvent.clientY - startY;
 
       let newLeft = initialRect.left + deltaX;
       let newTop = initialRect.top + deltaY;
@@ -735,14 +819,38 @@
       applyPosition();
     };
 
-    const onPointerUp = () => {
+    const onPointerMove = (event) => {
+      if (!isDragging) {
+        return;
+      }
+      event.preventDefault();
+      pendingEvent = event;
+      // Coalesce every pointermove into a single update per animation
+      // frame instead of doing a synchronous style + composite per event.
+      if (rafId === null) {
+        rafId = requestAnimationFrame(flushMove);
+      }
+    };
+
+    const onPointerUp = (event) => {
       if (!isDragging) {
         return;
       }
       isDragging = false;
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
       dragHandle.classList.remove("edge-touch-bar__drag-handle--active");
+      root.classList.remove("edge-touch-bar--dragging");
+      document.documentElement.style.removeProperty("user-select");
+      document.documentElement.style.removeProperty("cursor");
+      if (dragHandle.hasPointerCapture?.(event.pointerId)) {
+        dragHandle.releasePointerCapture(event.pointerId);
+      }
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
       savePosition();
     };
 
@@ -757,10 +865,20 @@
       startX = event.clientX;
       startY = event.clientY;
       initialRect = root.getBoundingClientRect();
+      dragHandle.setPointerCapture?.(event.pointerId);
 
       dragHandle.classList.add("edge-touch-bar__drag-handle--active");
+      // Drop the backdrop-filter blur and other transitions for the
+      // duration of the drag: recomputing blur every frame is the other
+      // big contributor to dragging feeling laggy.
+      root.classList.add("edge-touch-bar--dragging");
+      // Prevent the underlying page from selecting text while the pointer
+      // sweeps across it during a fast drag.
+      document.documentElement.style.userSelect = "none";
+      document.documentElement.style.cursor = "grabbing";
       window.addEventListener("pointermove", onPointerMove);
       window.addEventListener("pointerup", onPointerUp);
+      window.addEventListener("pointercancel", onPointerUp);
     });
 
     dragHandle.addEventListener("dblclick", (event) => {
@@ -780,14 +898,16 @@
     let startX = 0;
     let initialWidth = 0;
     let isResizing = false;
+    let rafId = null;
+    let pendingEvent = null;
 
-    const onPointerMove = (event) => {
-      if (!isResizing || !root) {
+    const flushResize = () => {
+      rafId = null;
+      if (!isResizing || !root || !pendingEvent) {
         return;
       }
-      event.preventDefault();
 
-      const deltaX = event.clientX - startX;
+      const deltaX = pendingEvent.clientX - startX;
       let newWidth = initialWidth + deltaX;
 
       const maxWidth = Math.max(360, window.innerWidth - 24);
@@ -797,14 +917,34 @@
       applySize();
     };
 
-    const onPointerUp = () => {
+    const onPointerMove = (event) => {
+      if (!isResizing) {
+        return;
+      }
+      event.preventDefault();
+      pendingEvent = event;
+      if (rafId === null) {
+        rafId = requestAnimationFrame(flushResize);
+      }
+    };
+
+    const onPointerUp = (event) => {
       if (!isResizing) {
         return;
       }
       isResizing = false;
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
       resizeHandle.classList.remove("edge-touch-bar__resize-handle--active");
+      root.classList.remove("edge-touch-bar--dragging");
+      if (resizeHandle.hasPointerCapture?.(event.pointerId)) {
+        resizeHandle.releasePointerCapture(event.pointerId);
+      }
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
       saveSize();
     };
 
@@ -818,10 +958,13 @@
       isResizing = true;
       startX = event.clientX;
       initialWidth = root.getBoundingClientRect().width;
+      resizeHandle.setPointerCapture?.(event.pointerId);
 
       resizeHandle.classList.add("edge-touch-bar__resize-handle--active");
+      root.classList.add("edge-touch-bar--dragging");
       window.addEventListener("pointermove", onPointerMove);
       window.addEventListener("pointerup", onPointerUp);
+      window.addEventListener("pointercancel", onPointerUp);
     });
 
     resizeHandle.addEventListener("dblclick", (event) => {
@@ -857,6 +1000,15 @@
 
       :host([hidden]) {
         display: none !important;
+      }
+
+      :host(.edge-touch-bar--dragging) .edge-touch-bar {
+        backdrop-filter: none;
+        transition: none;
+      }
+
+      :host(.edge-touch-bar--dragging) {
+        will-change: transform;
       }
 
       :host,
@@ -1077,11 +1229,8 @@
 
       .edge-touch-bar__suggestions {
         display: flex;
-        flex-wrap: nowrap;
-        overflow-x: auto;
+        flex-wrap: wrap;
         gap: 6px;
-        padding-bottom: 4px;
-        scrollbar-width: thin;
       }
 
       .edge-touch-bar__suggestions[hidden],
@@ -1090,14 +1239,51 @@
       }
 
       .edge-touch-bar__suggestion {
-        display: inline-flex;
+        display: inline-grid;
+        grid-template-columns: 18px minmax(0, auto);
         align-items: center;
         gap: 6px;
         max-width: 210px;
-        padding: 5px 9px;
+        padding: 5px 9px 5px 5px;
         overflow: hidden;
         font-size: 12px;
-        flex-shrink: 0;
+      }
+
+      .edge-touch-bar__suggestion--lookup {
+        grid-template-columns: 18px minmax(0, auto) 16px;
+      }
+
+      .edge-touch-bar__lookup {
+        display: inline-grid;
+        place-items: center;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: rgb(255 255 255 / 14%);
+        color: #f5f7fb;
+        font-size: 10px;
+        font-weight: 800;
+        line-height: 1;
+        flex: 0 0 auto;
+        cursor: pointer;
+      }
+
+      .edge-touch-bar__lookup:hover,
+      .edge-touch-bar__lookup:focus-visible {
+        background: #69e1ff;
+        color: #102019;
+        outline: none;
+      }
+
+      .edge-touch-bar__snippet--lookup {
+        position: relative;
+        padding-right: 26px;
+      }
+
+      .edge-touch-bar__snippet--lookup .edge-touch-bar__lookup {
+        position: absolute;
+        top: 6px;
+        right: 6px;
       }
 
       .edge-touch-bar__suggestion[data-source="recent"] {
@@ -1227,6 +1413,10 @@
         border-color: rgb(0 0 0 / 12%);
         color: #1e293b;
       }
+      .edge-touch-bar[data-theme="light-glass"] .edge-touch-bar__lookup {
+        background: rgb(0 0 0 / 10%);
+        color: #1e293b;
+      }
       .edge-touch-bar[data-theme="light-glass"] .edge-touch-bar__mode-menu {
         background: rgb(255 255 255 / 96%);
         border-color: rgb(0 0 0 / 12%);
@@ -1332,12 +1522,6 @@
     modeMenu = shadowRoot.querySelector(".edge-touch-bar__mode-menu");
     shortcutHint = shadowRoot.querySelector(".edge-touch-bar__hint");
 
-    container.addEventListener("mousedown", (event) => {
-      if (event.target !== input) {
-        event.preventDefault();
-      }
-    });
-
     input.addEventListener("input", () => {
       rememberTerms(extractHistoryTerms(input.value));
       renderSuggestions();
@@ -1373,45 +1557,56 @@
 
   const init = async () => {
     await Promise.all([loadDictionaries(), loadRecentHistory(), loadSavedPosition(), loadSavedSize(), loadSavedTheme()]);
-    
-    try {
-      const storedSettings = await chrome.storage.sync.get(DEFAULT_SETTINGS);
-      settings = {
-        ...DEFAULT_SETTINGS,
-        ...(storedSettings || {})
-      };
-    } catch (e) {
-      settings = { ...DEFAULT_SETTINGS };
-    }
+    settings = {
+      ...DEFAULT_SETTINGS,
+      ...(await chrome.storage.sync.get(DEFAULT_SETTINGS))
+    };
 
     createRoot();
     setEnabled(settings.enabled);
-    const activeEl = getActiveElement();
-    if (isEditable(activeEl)) {
-      lastEditable = activeEl;
-    }
-    detectLanguageMode(activeEl);
+    detectLanguageMode(document.activeElement);
     updateDictionaryUi();
   };
 
+  let syncRafId = null;
+  let pendingSyncTarget = null;
+
+  const flushTouchBarSync = () => {
+    syncRafId = null;
+    if (!pendingSyncTarget || !input) {
+      return;
+    }
+    input.value = getEditableText(pendingSyncTarget).trim().split(/\s+/).pop() || "";
+    renderSuggestions();
+  };
+
+  // Coalesce every keystroke into a single DOM update per animation frame
+  // instead of rebuilding the suggestion list synchronously on each one -
+  // this is what caused typing to feel laggy on fast input.
+  const scheduleTouchBarSync = (target) => {
+    pendingSyncTarget = target;
+    if (syncRafId === null) {
+      syncRafId = requestAnimationFrame(flushTouchBarSync);
+    }
+  };
+
   document.addEventListener("focusin", (event) => {
-    const activeEl = getActiveElement();
-    if (isEditable(activeEl)) {
-      lastEditable = activeEl;
-      detectLanguageMode(activeEl);
+    if (isEditable(event.target)) {
+      lastEditable = event.target;
+      // Language mode is only worth (re-)detecting on focus change - it
+      // does a document-wide querySelector, which is too costly to repeat
+      // on every keystroke, and the field rarely changes dictionary mid-type.
+      detectLanguageMode(event.target);
       input.value = "";
       renderSuggestions();
     }
   }, true);
 
   document.addEventListener("input", (event) => {
-    const activeEl = getActiveElement();
-    if (isEditable(activeEl)) {
-      lastEditable = activeEl;
-      detectLanguageMode(activeEl);
-      input.value = getEditableText(activeEl).trim().split(/\s+/).pop() || "";
-      scheduleRememberFromElement(activeEl);
-      renderSuggestions();
+    if (isEditable(event.target)) {
+      lastEditable = event.target;
+      scheduleRememberFromElement(event.target);
+      scheduleTouchBarSync(event.target);
     }
   }, true);
 
@@ -1428,7 +1623,6 @@
 
     if (changes.dictionary) {
       settings.dictionary = changes.dictionary.newValue;
-      userOverrideDictionary = true;
       updateDictionaryUi();
     }
   });
