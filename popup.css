@@ -105,6 +105,11 @@ p {
   transform: translateX(18px);
 }
 
+.switch input:focus-visible + .switch__track {
+  outline: 2px solid #69e1ff;
+  outline-offset: 2px;
+}
+
 .switch__label,
 label {
   font-size: 13px;
